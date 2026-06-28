@@ -1,22 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { VerifyInput } from '../components/verify/VerifyInput';
+import { useVerification } from '../hooks/useVerification';
+import { AlertCircle } from 'lucide-react';
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const [isVerifying, setIsVerifying] = React.useState(false);
+  const { submitVerification } = useVerification();
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleVerifySubmit = (data) => {
+  const handleVerifySubmit = async (data) => {
     setIsVerifying(true);
-    // In a real implementation, this would make an API call
-    console.log('Submitting verification:', data);
-    
-    // Simulate API delay then navigate
-    setTimeout(() => {
+    setErrorMsg('');
+    try {
+      const verificationId = await submitVerification(data);
+      navigate(`/verify?id=${verificationId}`);
+    } catch (err) {
+      setErrorMsg(err.response?.data?.detail || 'Failed to connect to the verification engine.');
       setIsVerifying(false);
-      navigate('/verify?id=mock_id_123');
-    }, 1500);
+    }
   };
 
   return (
@@ -53,6 +57,12 @@ const HomePage = () => {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="px-2"
           >
+            {errorMsg && (
+              <div className="max-w-3xl mx-auto mb-4 p-4 rounded-lg bg-false-red/10 border border-false-red/30 flex items-start gap-3 text-false-red">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                <p className="text-sm">{errorMsg}</p>
+              </div>
+            )}
             <VerifyInput onSubmit={handleVerifySubmit} isLoading={isVerifying} />
           </motion.div>
         </div>

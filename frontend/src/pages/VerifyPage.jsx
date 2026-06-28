@@ -1,75 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Share2, AlertCircle } from 'lucide-react';
+import { Share2, AlertCircle, Loader2 } from 'lucide-react';
 import { TrustScoreCircle } from '../components/verify/TrustScoreCircle';
 import { VerdictBadge } from '../components/verify/VerdictBadge';
 import { EvidencePanel } from '../components/verify/EvidencePanel';
 import { SentenceAnnotation } from '../components/verify/SentenceAnnotation';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
-
-// Mock data for initial UI building
-const mockResult = {
-  id: "ver_test_123",
-  overall_trust_score: 0.23,
-  overall_verdict: "false",
-  raw_input: "Scientists have discovered a new planet in our solar system that is 10 times larger than Jupiter. This incredible finding will change everything we know about the universe forever.",
-  claims: [
-    {
-      id: "clm_1",
-      claim_index: 0,
-      original_sentence: "Scientists have discovered a new planet in our solar system",
-      extracted_claim: "A new planet has been discovered in our solar system",
-      verdict: "verified",
-      confidence: 0.85,
-      explanation: "NASA confirmed exoplanet discoveries, though the location in 'our solar system' is conflated with other discoveries.",
-      sources: [
-        { source_name: "NASA", source_domain: "nasa.gov", trust_score: 0.98, stance: "neutral", relevant_quote: "Thousands of exoplanets discovered outside our solar system.", source_url: "#" }
-      ]
-    },
-    {
-      id: "clm_2",
-      claim_index: 1,
-      original_sentence: "that is 10 times larger than Jupiter.",
-      extracted_claim: "The discovered planet is 10 times larger than Jupiter",
-      verdict: "false",
-      confidence: 0.97,
-      explanation: "No planet in our solar system exceeds Jupiter's size. Jupiter remains the largest planet.",
-      sources: [
-        { source_name: "Space.com", source_domain: "space.com", trust_score: 0.92, stance: "contradicts", relevant_quote: "Jupiter is the largest planet in our solar system.", source_url: "#" }
-      ]
-    },
-    {
-      id: "clm_3",
-      claim_index: 2,
-      original_sentence: "This incredible finding will change everything we know about the universe forever.",
-      extracted_claim: "The finding changes everything known about the universe",
-      verdict: "exaggerated",
-      confidence: 0.75,
-      explanation: "Sensationalist language used to describe routine astronomical discoveries.",
-      sources: []
-    }
-  ]
-};
+import { useVerification } from '../hooks/useVerification';
 
 const VerifyPage = () => {
   const [searchParams] = useSearchParams();
   const id = searchParams.get('id');
+  const { data: result, status, error } = useVerification(id);
   const [activeClaimId, setActiveClaimId] = useState(null);
   
-  // In a real app, we'd fetch data using the ID. For now, use mock if ID exists.
-  const result = id ? mockResult : null;
+  // Set first claim active when results load
+  useEffect(() => {
+    if (result?.claims?.length > 0 && !activeClaimId) {
+      setActiveClaimId(result.claims[0].id);
+    }
+  }, [result, activeClaimId]);
 
-  if (!result) {
+  if (status === 'error') {
     return (
       <div className="container mx-auto px-4 py-32 flex flex-col items-center justify-center text-center">
-        <AlertCircle className="w-16 h-16 text-text-tertiary mb-6" />
-        <h1 className="text-3xl font-display font-bold mb-4">No Verification Found</h1>
+        <AlertCircle className="w-16 h-16 text-false-red mb-6" />
+        <h1 className="text-3xl font-display font-bold mb-4">Error Fetching Results</h1>
         <p className="text-text-secondary max-w-md mx-auto mb-8">
-          We couldn't find the verification result you're looking for. It may have expired or the ID is incorrect.
+          {error || "We couldn't retrieve the verification result you're looking for."}
         </p>
         <Button onClick={() => window.location.href = '/'}>Return Home</Button>
+      </div>
+    );
+  }
+
+  if (status === 'processing' || !result) {
+    return (
+      <div className="container mx-auto px-4 py-32 flex flex-col items-center justify-center text-center">
+        <Loader2 className="w-16 h-16 text-opinion-purple animate-spin mb-6" />
+        <h1 className="text-3xl font-display font-bold mb-4">Analyzing Content...</h1>
+        <p className="text-text-secondary max-w-md mx-auto mb-8">
+          Our LangGraph AI pipeline is currently extracting claims, retrieving sources, and analyzing evidence.
+        </p>
       </div>
     );
   }
