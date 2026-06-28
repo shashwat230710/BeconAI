@@ -1,16 +1,16 @@
 import uuid
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from sqlalchemy.orm import Session
 from app.models.schemas import VerifyRequest, VerifyResponseData, StandardResponse
 from app.agents.state import VerificationState
 from app.agents.pipeline import verification_pipeline
+from app.db.session import get_db
+from app.db.models import Verification, ClaimModel, SourceModel
 
 router = APIRouter()
 
-# In-memory store for prototype (in production this would be Redis/DB)
-VERIFICATIONS = {}
-
-def process_verification(verification_id: str, content: str, mode: str):
-    """Background task to run the LangGraph pipeline."""
+def process_verification(verification_id: str, content: str, mode: str, db: Session):
+    """Background task to run the LangGraph pipeline and save to DB."""
     state = VerificationState(
         verification_id=verification_id,
         raw_input=content,
@@ -27,25 +27,67 @@ def process_verification(verification_id: str, content: str, mode: str):
     # Run the pipeline
     final_state = verification_pipeline.invoke(state)
     
-    # Update store
-    VERIFICATIONS[verification_id] = {
-        "status": "completed",
-        "result": final_state
-    }
+    # Save to database
+    db_ver = db.query(Verification).filter(Verification.id == verification_id).first()
+    if db_ver:
+        db_ver.status = "completed"
+        db_ver.overall_trust_score = final_state.get("overall_trust_score", 0.0)
+        db_ver.overall_verdict = final_state.get("overall_verdict", "unverified")
+        db_ver.confidence = final_state.get("confidence", 0.0)
+        db_ver.annotated_html = final_state.get("annotated_html", "")
+        db_ver.error = final_state.get("error")
+        
+        for claim in final_state.get("claims", []):
+            db_claim = ClaimModel(
+                id=claim.id,
+                verification_id=verification_id,
+                claim_index=claim.claim_index,
+                original_sentence=claim.original_sentence,
+                extracted_claim=claim.extracted_claim,
+                verdict=claim.verdict,
+                confidence=claim.confidence,
+                explanation=claim.explanation
+            )
+            db.add(db_claim)
+            
+            for source in claim.sources:
+                db_source = SourceModel(
+                    id=f"src_{uuid.uuid4().hex[:8]}",
+                    claim_id=claim.id,
+                    source_name=source.source_name,
+                    source_domain=source.source_domain,
+                    trust_score=source.trust_score,
+                    stance=source.stance,
+                    relevant_quote=source.relevant_quote,
+                    source_url=source.source_url
+                )
+                db.add(db_source)
+                
+        db.commit()
+    db.close()
 
 @router.post("/text", response_model=StandardResponse, status_code=202)
-async def verify_text(request: VerifyRequest, background_tasks: BackgroundTasks):
+async def verify_text(request: VerifyRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Submit text for verification."""
     verification_id = f"ver_{uuid.uuid4().hex}"
     
-    # Initialize state in memory
-    VERIFICATIONS[verification_id] = {
-        "status": "processing",
-        "result": None
-    }
+    # Initialize state in DB
+    db_ver = Verification(
+        id=verification_id,
+        status="processing",
+        raw_input=request.content,
+        input_type="text",
+        analysis_mode=request.mode
+    )
+    db.add(db_ver)
+    db.commit()
+    
+    # Create a new session for the background task to avoid thread issues
+    from app.db.session import SessionLocal
+    bg_db = SessionLocal()
     
     # Trigger background processing
-    background_tasks.add_task(process_verification, verification_id, request.content, request.mode)
+    background_tasks.add_task(process_verification, verification_id, request.content, request.mode, bg_db)
     
     return StandardResponse(
         success=True,
@@ -58,32 +100,54 @@ async def verify_text(request: VerifyRequest, background_tasks: BackgroundTasks)
     )
 
 @router.get("/{verification_id}", response_model=StandardResponse)
-async def get_verification(verification_id: str):
+async def get_verification(verification_id: str, db: Session = Depends(get_db)):
     """Get the result of a verification."""
-    if verification_id not in VERIFICATIONS:
+    db_ver = db.query(Verification).filter(Verification.id == verification_id).first()
+    
+    if not db_ver:
         raise HTTPException(status_code=404, detail="Verification not found")
         
-    data = VERIFICATIONS[verification_id]
-    
-    if data["status"] == "processing":
+    if db_ver.status == "processing":
         return StandardResponse(
             success=True,
             data={"status": "processing", "message": "Verification is still in progress"}
         )
         
     # Format result for client
-    result = data["result"]
+    claims_data = []
+    for claim in db_ver.claims:
+        sources_data = [{
+            "source_name": s.source_name,
+            "source_domain": s.source_domain,
+            "trust_score": s.trust_score,
+            "stance": s.stance,
+            "relevant_quote": s.relevant_quote,
+            "source_url": s.source_url
+        } for s in claim.sources]
+        
+        claims_data.append({
+            "id": claim.id,
+            "claim_index": claim.claim_index,
+            "original_sentence": claim.original_sentence,
+            "extracted_claim": claim.extracted_claim,
+            "verdict": claim.verdict,
+            "confidence": claim.confidence,
+            "explanation": claim.explanation,
+            "sources": sources_data
+        })
+    
     client_data = {
-        "id": result["verification_id"],
-        "status": "completed",
-        "input_type": result["input_type"],
-        "analysis_mode": result["analysis_mode"],
-        "overall_trust_score": result["overall_trust_score"],
-        "overall_verdict": result["overall_verdict"],
-        "confidence": result["confidence"],
-        "claims_count": len(result.get("claims", [])),
-        "claims": [c.model_dump() for c in result.get("claims", [])],
-        "annotated_html": result["annotated_html"]
+        "id": db_ver.id,
+        "status": db_ver.status,
+        "input_type": db_ver.input_type,
+        "analysis_mode": db_ver.analysis_mode,
+        "overall_trust_score": db_ver.overall_trust_score,
+        "overall_verdict": db_ver.overall_verdict,
+        "confidence": db_ver.confidence,
+        "claims_count": len(claims_data),
+        "claims": claims_data,
+        "annotated_html": db_ver.annotated_html,
+        "error": db_ver.error
     }
     
     return StandardResponse(success=True, data=client_data)

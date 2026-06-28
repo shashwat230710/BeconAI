@@ -2,6 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.models.schemas import StandardResponse
 from app.api import verify
+from app.db.session import engine, Base
+
+# Create tables
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Beacon (VeritAI) API",
