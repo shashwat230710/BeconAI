@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-surface-dark text-text-inverse antialiased selection:bg-opinion-purple selection:text-white;
+  }
+}
+
+@layer components {
+  /* Reusable component styles can go here if not using inline utility classes */
+}
