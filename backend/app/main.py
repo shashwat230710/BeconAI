@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from app.models.schemas import StandardResponse
+from app.api import verify
 
 app = FastAPI(
     title="Beacon (VeritAI) API",
@@ -17,13 +18,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class HealthResponse(BaseModel):
-    status: str
-    version: str
+# Include routers
+app.include_router(verify.router, prefix="/v1/api/verify", tags=["Verification"])
 
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health", response_model=StandardResponse)
 async def health_check():
     """Health check endpoint."""
-    return HealthResponse(status="healthy", version="1.0.0")
-
-# API routing will be added here
+    return StandardResponse(
+        success=True,
+        data={"status": "healthy", "version": "1.0.0"}
+    )
