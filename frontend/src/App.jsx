@@ -1,13 +1,12 @@
 import { Routes, Route } from 'react-router-dom';
 import { Navbar, Footer } from './components/layout/Layout';
 import HomePage from './pages/HomePage';
+import VerifyPage from './pages/VerifyPage';
+import BrowsePage from './pages/BrowsePage';
+import LeaderboardPage from './pages/LeaderboardPage';
+import HeatmapPage from './pages/HeatmapPage';
 
-// Page Stubs
-const VerifyPage = () => <div className="container mx-auto px-4 py-16 text-center"><h1 className="text-4xl font-display font-bold mb-4">Verify Content</h1></div>
-const BrowsePage = () => <div className="container mx-auto px-4 py-16 text-center"><h1 className="text-4xl font-display font-bold mb-4">Browse Verified News</h1></div>
-const LeaderboardPage = () => <div className="container mx-auto px-4 py-16 text-center"><h1 className="text-4xl font-display font-bold mb-4">Source Leaderboard</h1></div>
-const HeatmapPage = () => <div className="container mx-auto px-4 py-16 text-center"><h1 className="text-4xl font-display font-bold mb-4">Misinformation Heatmap</h1></div>
-const NotFoundPage = () => <div className="container mx-auto px-4 py-16 text-center"><h1 className="text-4xl font-display font-bold mb-4 text-false-red">404 - Not Found</h1></div>
+const NotFoundPage = () => <div className="container mx-auto px-4 py-32 text-center"><h1 className="text-4xl font-display font-bold mb-4 text-false-red">404 - Not Found</h1><p className="text-text-tertiary">The page you are looking for does not exist.</p></div>
 
 function App() {
   return (
