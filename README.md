@@ -68,7 +68,7 @@ The `docs/` folder contains the complete, implementation-ready architectural spe
 9.  `09-security-design.md` - Threat Models & Auth
 10. `10-testing-strategy.md` - QA & Testing Pyramids
 11. `11-project-structure.md` - Git Workflows & Naming Conventions
-12. `12-ai-context.md` - Prompt Rules for AI Agents
+12. `12-ai-context.md` - Prompt Rules for AI Agents.
 
 *(Note: The `docs/` folder is explicitly `.gitignore`d in production to maintain a clean deployed footprint, but is retained locally for architectural reference).*
 
